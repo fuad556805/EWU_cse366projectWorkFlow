@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Natural Language → SQL — কীভাবে কাজ করে</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --white: #ffffff;
+    --bg: #f7f9fc;
+    --surface: #ffffff;
+    --border: #e2e8f0;
+    --border-soft: #edf2f7;
+    --text: #1a1f2e;
+    --text-soft: #4a5568;
+    --muted: #94a3b8;
+    --blue: #3b6ef8;
+    --blue-soft: #eef2ff;
+    --teal: #0ea5a0;
+    --teal-soft: #e6faf9;
+    --amber: #f59e0b;
+    --amber-soft: #fffbeb;
+    --violet: #7c3aed;
+    --violet-soft: #f5f0ff;
+    --green: #10b981;
+    --code-bg: #f1f5f9;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.07), 0 2px 6px rgba(0,0,0,0.04);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Hind Siliguri', 'Inter', sans-serif;
+    line-height: 1.75;
+    overflow-x: hidden;
+  }
+  h1,h2,h3,h4 {
+    font-family: 'Inter', 'Hind Siliguri', sans-serif;
+    letter-spacing: -0.02em;
+  }
+  code, pre, .mono { font-family: 'JetBrains Mono', monospace; }
+  a { color: var(--blue); }
+
+  /* NAVBAR */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(255,255,255,0.94);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 58px;
+  }
+  .nav-brand {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; font-weight: 700;
+    color: var(--blue); letter-spacing: 0.04em;
+  }
+  .nav-dots { display: flex; gap: 6px; }
+  .nav-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--border); cursor: pointer;
+    transition: background 0.3s, transform 0.2s;
+  }
+  .nav-dot:hover { transform: scale(1.3); }
+  .nav-dot.active { background: var(--blue); }
+  @media(max-width:600px){ .nav-dots { display: none; } }
+
+  /* HERO */
+  header.hero {
+    background: var(--white);
+    border-bottom: 1px solid var(--border);
+    padding: 80px 24px 72px;
+    text-align: center;
+    position: relative; overflow: hidden;
+  }
+  .hero-stripe {
+    position: absolute; top: 0; left: 0; right: 0; height: 4px;
+    background: linear-gradient(90deg, var(--blue) 0%, var(--teal) 50%, var(--violet) 100%);
+  }
+  .hero-dots {
+    position: absolute; inset: 0; z-index: 0;
+    background-image: radial-gradient(var(--border) 1.5px, transparent 1.5px);
+    background-size: 28px 28px; opacity: 0.55;
+  }
+  .hero-inner { position: relative; z-index: 1; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--blue);
+    background: var(--blue-soft);
+    border: 1px solid rgba(59,110,248,0.2);
+    border-radius: 20px; padding: 5px 14px;
+    margin-bottom: 24px;
+  }
+  .eyebrow::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--blue); }
+  .hero h1 {
+    font-size: clamp(28px, 5.5vw, 58px);
+    font-weight: 800; line-height: 1.1;
+    margin: 0 0 20px; color: var(--text);
+  }
+  .grad-text {
+    background: linear-gradient(135deg, var(--blue), var(--teal));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero-sub {
+    max-width: 580px; margin: 0 auto 32px;
+    color: var(--text-soft);
+    font-size: clamp(15px,2vw,18px); line-height: 1.7;
+  }
+  .hero-query-wrap {
+    display: inline-flex; align-items: stretch;
+    border: 1.5px solid var(--border);
+    border-radius: 14px; background: var(--white);
+    box-shadow: var(--shadow-md); overflow: hidden; max-width: 100%;
+  }
+  .query-label {
+    background: var(--code-bg); border-right: 1px solid var(--border);
+    padding: 14px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px; color: var(--muted);
+    display: flex; align-items: center; white-space: nowrap; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .query-text {
+    padding: 14px 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; color: var(--text);
+    display: flex; align-items: center; gap: 8px; text-align: left;
+  }
+  .caret {
+    display: inline-block; width: 7px; height: 16px;
+    background: var(--blue); border-radius: 1px;
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .scroll-hint {
+    margin-top: 36px; font-size: 12px; color: var(--muted);
+    font-family: 'JetBrains Mono', monospace; letter-spacing: 0.1em;
+    animation: bob 2s ease-in-out infinite;
+  }
+  @keyframes bob { 0%,100%{transform:translateY(0);} 50%{transform:translateY(5px);} }
+
+  /* PIPELINE BAR */
+  .pipe-bar {
+    background: var(--white); border-bottom: 1px solid var(--border);
+    padding: 18px 24px; overflow-x: auto; -webkit-overflow-scrolling: touch;
+  }
+  .pipe-inner {
+    display: flex; align-items: center; gap: 0;
+    min-width: max-content; max-width: 900px; margin: 0 auto;
+  }
+  .pipe-node { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+  .pipe-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; border: 1.5px solid var(--border); background: var(--bg);
+  }
+  .pipe-lbl {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 700; color: var(--muted);
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .pipe-arr { font-size: 14px; color: var(--border); padding: 0 6px; margin-bottom: 18px; flex-shrink: 0; }
+
+  /* MAIN */
+  main { max-width: 860px; margin: 0 auto; padding: 48px 24px 100px; }
+
+  /* STEP */
+  .step {
+    margin-bottom: 40px;
+    opacity: 0; transform: translateY(22px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+  .step.visible { opacity: 1; transform: translateY(0); }
+
+  .card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 32px 32px 28px;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.3s;
+  }
+  .card:hover { box-shadow: var(--shadow-md); }
+
+  .step-hdr { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 18px; }
+  .step-num {
+    min-width: 40px; height: 40px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px; font-weight: 800; flex-shrink: 0; letter-spacing: 0.04em;
+  }
+  .c-blue   { background:var(--blue-soft);   color:var(--blue);   border:1.5px solid rgba(59,110,248,0.25); }
+  .c-teal   { background:var(--teal-soft);   color:var(--teal);   border:1.5px solid rgba(14,165,160,0.25); }
+  .c-amber  { background:var(--amber-soft);  color:var(--amber);  border:1.5px solid rgba(245,158,11,0.25); }
+  .c-violet { background:var(--violet-soft); color:var(--violet); border:1.5px solid rgba(124,58,237,0.25); }
+  .c-green  { background:#ecfdf5; color:var(--green); border:1.5px solid rgba(16,185,129,0.25); }
+
+  .title-wrap { flex: 1; }
+  .en-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 3px;
+  }
+  .card h2 { font-size: clamp(17px,2.6vw,22px); font-weight: 700; margin: 0; color: var(--text); }
+
+  .desc {
+    color: var(--text-soft); font-size: 15.5px;
+    margin: 0 0 20px; line-height: 1.72;
+  }
+  .desc .hl   { color:var(--blue);   font-weight:600; }
+  .desc .hl-t { color:var(--teal);   font-weight:600; }
+  .desc .hl-a { color:var(--amber);  font-weight:600; }
+  .desc .hl-v { color:var(--violet); font-weight:600; }
+  .desc .en   { font-size:13.5px; color:var(--muted); }
+
+  /* TABLE */
+  .tbl-wrap { border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  .tbl-hdr {
+    background:var(--code-bg); border-bottom:1px solid var(--border);
+    padding:8px 16px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px; font-weight:700; color:var(--muted);
+    letter-spacing:0.07em; text-transform:uppercase;
+    display:flex; align-items:center; gap:7px;
+  }
+  .tbl-hdr::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--amber); }
+  table.demo { width:100%; border-collapse:collapse; font-size:13.5px; font-family:'JetBrains Mono',monospace; }
+  table.demo th {
+    padding:10px 16px; background:var(--code-bg);
+    text-align:left; font-weight:700;
+    color:var(--blue); border-bottom:1px solid var(--border);
+    font-size:12px; letter-spacing:0.05em;
+  }
+  table.demo td { padding:10px 16px; border-bottom:1px solid var(--border-soft); color:var(--text); }
+  table.demo tr:last-child td { border-bottom:none; }
+  table.demo tr.match td { background:#fffbeb; color:#92400e; font-weight:600; }
+
+  /* CODE */
+  pre {
+    background:var(--code-bg); border:1px solid var(--border);
+    border-radius:12px; padding:18px 20px;
+    overflow-x:auto; font-size:13px; line-height:1.65; margin:0; color:var(--text);
+  }
+  .kw  { color:var(--violet); font-weight:600; }
+  .col { color:var(--teal); }
+  .val { color:var(--amber); font-weight:500; }
+  .fn  { color:var(--blue); }
+  .com { color:var(--muted); font-style:italic; }
+
+  /* CHIPS */
+  .chip-row { display:flex; flex-wrap:wrap; gap:8px; padding:14px 16px; }
+  .chip {
+    font-family:'JetBrains Mono',monospace; font-size:12.5px;
+    background:var(--code-bg); border:1px solid var(--border);
+    border-radius:8px; padding:6px 12px; color:var(--text-soft);
+    display:flex; align-items:center; gap:6px;
+  }
+  .chip.b  { background:var(--blue-soft);   color:var(--blue);   border-color:rgba(59,110,248,0.2); }
+  .chip.t  { background:var(--teal-soft);   color:var(--teal);   border-color:rgba(14,165,160,0.2); }
+  .chip.a  { background:var(--amber-soft);  color:#92400e;       border-color:rgba(245,158,11,0.2); }
+  .chip.v  { background:var(--violet-soft); color:var(--violet); border-color:rgba(124,58,237,0.2); }
+
+  /* BRAIN GRID */
+  .brain-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  @media(max-width:620px){ .brain-grid{ grid-template-columns:1fr; } }
+  .brain-card {
+    background:var(--bg); border:1px solid var(--border);
+    border-radius:12px; padding:18px 16px;
+  }
+  .bc-num {
+    font-family:'JetBrains Mono',monospace; font-size:9.5px; font-weight:700;
+    letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin-bottom:6px;
+  }
+  .brain-card h4 { margin:0 0 8px; font-size:14px; font-weight:700; color:var(--text); }
+  .brain-card p  { margin:0; font-size:13px; color:var(--text-soft); line-height:1.6; }
+
+  /* PARSE ROW */
+  .parse-row { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:14px 16px; }
+  .parse-item { display:flex; flex-direction:column; gap:3px; }
+  .parse-lbl {
+    font-family:'JetBrains Mono',monospace; font-size:9.5px; font-weight:700;
+    letter-spacing:0.1em; text-transform:uppercase; color:var(--muted);
+  }
+  .parse-val {
+    font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:700;
+    padding:5px 12px; border-radius:8px;
+  }
+  .parse-arr { color:var(--border); font-size:20px; margin-top:12px; }
+
+  /* SUMMARY FLOW */
+  .summary-flow { display:flex; flex-direction:column; gap:0; }
+  .flow-node {
+    background:var(--bg); border:1px solid var(--border);
+    border-radius:10px; padding:13px 18px;
+    font-size:14.5px; color:var(--text);
+    display:flex; align-items:center; gap:12px;
+  }
+  .flow-node.accent {
+    background:var(--blue-soft); border-color:rgba(59,110,248,0.25);
+    color:var(--blue); font-weight:600;
+  }
+  .flow-node .fi { font-size:18px; flex-shrink:0; }
+  .flow-down { text-align:left; padding:3px 18px; color:var(--border); font-size:22px; line-height:1; }
+
+  /* DIVIDER */
+  .divider {
+    display:flex; align-items:center; gap:12px;
+    margin:36px 0; color:var(--muted);
+    font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:0.1em;
+  }
+  .divider::before,.divider::after { content:""; flex:1; height:1px; background:var(--border); }
+
+  /* FOOTER */
+  footer {
+    background:var(--white); border-top:1px solid var(--border);
+    text-align:center; padding:36px 24px 52px;
+    color:var(--muted); font-size:13px;
+  }
+  .footer-brand {
+    font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700;
+    color:var(--blue); margin-bottom:6px;
+  }
+  .heart { color:var(--amber); }
+
+  @media(max-width:600px){
+    .card{ padding:22px 16px 20px; }
+    .query-label{ display:none; }
+  }
+  @media(prefers-reduced-motion:reduce){ *,*::before,*::after{ animation:none!important; transition:none!important; } }
+
+ </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">NL → SQL</div>
+  <div class="nav-dots" id="navDots"></div>
+</nav>
+
+<header class="hero">
+  <div class="hero-stripe"></div>
+  <div class="hero-dots"></div>
+  <div class="hero-inner">
+    <marquee behavior="scroll" direction="left" scrollamount="15">
+      <h3><mark>EWU: CSE366(sec:5) -Team:02-  Natural Language to SQL Query Generation System (Compositional Learning) -- WorkFlow --⬇️</mark></h3>
+    </marquee>
+    <div class="eyebrow">CSV → AI → SQL → Answer</div>
+</div>
+    <h1>Natural Language <span class="grad-text">→</span> SQL<br>সিস্টেম কীভাবে কাজ করে</h1>
+    <p class="hero-sub">
+      ইউজার সাদামাটা ইংরেজিতে প্রশ্ন করবে — সিস্টেম নিজেই বুঝে SQL বানিয়ে ডাটাবেস থেকে উত্তর বের করবে।<br>
+      <span style="font-size:14px;color:var(--muted);">The user asks in plain English — the system understands, generates SQL, and retrieves the answer.</span>
+    </p>
+    <div class="hero-query-wrap">
+      <div class="query-label">User Query</div>
+      <div class="query-text">Show employees from Dhaka whose salary is above 42000<span class="caret"></span></div>
+    </div>
+    <div class="scroll-hint">↓ নিচে স্ক্রল করুন · scroll down</div>
+  </div>
+</header>
+
+<div class="pipe-bar">
+  <div class="pipe-inner">
+    <div class="pipe-node"><div class="pipe-icon">📤</div><div class="pipe-lbl">CSV</div></div>
+    <div class="pipe-arr">→</div>
+    <div class="pipe-node"><div class="pipe-icon">🐼</div><div class="pipe-lbl">Pandas</div></div>
+    <div class="pipe-arr">→</div>
+    <div class="pipe-node"><div class="pipe-icon">🗄️</div><div class="pipe-lbl">SQLite</div></div>
+    <div class="pipe-arr">→</div>
+    <div class="pipe-node"><div class="pipe-icon">🧬</div><div class="pipe-lbl">Schema</div></div>
+    <div class="pipe-arr">→</div>
+    <div class="pipe-node"><div class="pipe-icon">🧠</div><div class="pipe-lbl">AI Brain</div></div>
+    <div class="pipe-arr">→</div>
+    <div class="pipe-node"><div class="pipe-icon">🧩</div><div class="pipe-lbl">Parser</div></div>
+    <div class="pipe-arr">→</div>
+    <div class="pipe-node"><div class="pipe-icon">⚙️</div><div class="pipe-lbl">SQL Gen</div></div>
+    <div class="pipe-arr">→</div>
+    <div class="pipe-node"><div class="pipe-icon">▶️</div><div class="pipe-lbl">Execute</div></div>
+    <div class="pipe-arr">→</div>
+    <div class="pipe-node"><div class="pipe-icon">✅</div><div class="pipe-lbl">Result</div></div>
+  </div>
+</div>
+
+<main>
+
+  <!-- STEP 1 -->
+  <section class="step" data-step="1">
+    <div class="card">
+      <div class="step-hdr">
+        <div class="step-num c-blue">01</div>
+        <div class="title-wrap">
+          <div class="en-label">Step 01 · Data Input</div>
+          <h2>📤 CSV আপলোড · Upload CSV</h2>
+        </div>
+      </div>
+      <p class="desc">সবকিছুর শুরু একটা সাধারণ <span class="hl-t">CSV ফাইল</span> থেকে। ইউজার একটা ডেটা ফাইল আপলোড করে — এটাই পুরো সিস্টেমের কাঁচামাল।<br>
+        <span class="en">Everything begins with a simple CSV file. The user uploads a data file — this is the raw material for the entire system.</span></p>
+      <div class="tbl-wrap">
+        <div class="tbl-hdr">employee.csv</div>
+        <table class="demo">
+          <tr><th>Name</th><th>Age</th><th>City</th><th>Salary</th></tr>
+          <tr><td>Fahim</td><td>23</td><td>Dhaka</td><td>40000</td></tr>
+          <tr><td>Rahim</td><td>30</td><td>Khulna</td><td>50000</td></tr>
+          <tr><td>Karim</td><td>25</td><td>Dhaka</td><td>45000</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider">STEP 01 → 02</div>
+
+  <!-- STEP 2 -->
+  <section class="step" data-step="2">
+    <div class="card">
+      <div class="step-hdr">
+        <div class="step-num c-teal">02</div>
+        <div class="title-wrap">
+          <div class="en-label">Step 02 · Data Loading</div>
+          <h2>🐼 Pandas দিয়ে CSV পড়া · Read with Pandas</h2>
+        </div>
+      </div>
+      <p class="desc">Python-এর <span class="hl">Pandas</span> CSV-কে একটা <span class="hl-t">DataFrame</span>-এ রূপান্তর করে — মেমোরিতে থাকা একটা টেবিল যেটা নিয়ে কোড সহজে কাজ করতে পারে।<br>
+        <span class="en">Python's Pandas converts the CSV into a DataFrame — an in-memory table the code can easily manipulate.</span></p>
+      <pre><span class="kw">import</span> pandas <span class="kw">as</span> pd
+
+df = pd.<span class="fn">read_csv</span>(<span class="val">"employee.csv"</span>)
+<span class="com"># DataFrame তৈরি হলো — rows × columns এ পরিণত</span></pre>
+    </div>
+  </section>
+
+  <div class="divider">STEP 02 → 03</div>
+
+  <!-- STEP 3 -->
+  <section class="step" data-step="3">
+    <div class="card">
+      <div class="step-hdr">
+        <div class="step-num c-amber">03</div>
+        <div class="title-wrap">
+          <div class="en-label">Step 03 · Persistence</div>
+          <h2>🗄️ SQLite ডাটাবেসে রূপান্তর · Convert to SQLite</h2>
+        </div>
+      </div>
+      <p class="desc">DataFrame-কে একটা আসল <span class="hl-t">SQLite ডাটাবেস টেবিলে</span> লোড করা হয়, যাতে সরাসরি SQL Query চালানো যায়।<br>
+        <span class="en">The DataFrame is loaded into a real SQLite database table so SQL queries can be executed directly.</span></p>
+      <pre><span class="kw">import</span> sqlite3
+
+conn = sqlite3.<span class="fn">connect</span>(<span class="val">"data.db"</span>)
+
+df.<span class="fn">to_sql</span>(<span class="val">"employees"</span>, conn,
+          if_exists=<span class="val">"replace"</span>,
+          index=<span class="kw">False</span>)
+<span class="com"># employees টেবিল SQLite-এ তৈরি হলো</span></pre>
+    </div>
+  </section>
+
+  <div class="divider">STEP 03 → 04</div>
+
+  <!-- STEP 4 -->
+  <section class="step" data-step="4">
+    <div class="card">
+      <div class="step-hdr">
+        <div class="step-num c-violet">04</div>
+        <div class="title-wrap">
+          <div class="en-label">Step 04 · Schema Awareness</div>
+          <h2>🧬 স্কিমা এক্সট্র্যাকশন · Schema Extraction</h2>
+        </div>
+      </div>
+      <p class="desc">SQL বানানোর আগে AI-কে জানতে হবে টেবিলে <span class="hl">কী কী Column</span> আছে এবং তাদের ডেটা টাইপ কী।<br>
+        <span class="en">Before generating SQL, the AI needs to know what columns exist in the table and their data types.</span></p>
+      <div class="tbl-wrap">
+        <div class="tbl-hdr">Table: employees — Schema</div>
+        <div class="chip-row">
+          <div class="chip b">Name <span style="opacity:.5">·</span> TEXT</div>
+          <div class="chip t">Age <span style="opacity:.5">·</span> INTEGER</div>
+          <div class="chip a">City <span style="opacity:.5">·</span> TEXT</div>
+          <div class="chip v">Salary <span style="opacity:.5">·</span> INTEGER</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider">STEP 04 → 05</div>
+
+  <!-- STEP 5 -->
+  <section class="step" data-step="5">
+    <div class="card">
+      <div class="step-hdr">
+        <div class="step-num c-blue">05</div>
+        <div class="title-wrap">
+          <div class="en-label">Step 05 · AI Core</div>
+          <h2>🧠 AI Query Understanding — সিস্টেমের মস্তিষ্ক · The Brain</h2>
+        </div>
+      </div>
+      <p class="desc">এখানেই আসল জাদু। তিনটা মডিউল একসাথে প্রশ্নের অর্থ বুঝে নেয়।<br>
+        <span class="en">This is where the magic happens. Three modules work together to understand the query's full meaning.</span></p>
+      <div class="brain-grid">
+        <div class="brain-card">
+          <div class="bc-num">Module A</div>
+          <h4>Sentence Transformer</h4>
+          <p>প্রশ্নকে Embedding ভেক্টরে বদলায়। ফলে <span style="color:var(--teal);font-family:monospace;font-size:12px;">"workers in Dhaka"</span> আর <span style="color:var(--teal);font-family:monospace;font-size:12px;">"employees from Dhaka"</span> একই অর্থ বোঝে।<br>
+            <span style="color:var(--muted);font-size:12px;">Converts queries to vectors so similar phrases match.</span>
+          </p>
+        </div>
+        <div class="brain-card">
+          <div class="bc-num">Module B</div>
+          <h4>Intent Classifier</h4>
+          <p>ইউজার কী করতে চায় ধরে: <span style="color:var(--violet);font-family:monospace;font-weight:700;font-size:12px;">SELECT</span>, <span style="color:var(--violet);font-family:monospace;font-weight:700;font-size:12px;">COUNT</span>, <span style="color:var(--violet);font-family:monospace;font-weight:700;font-size:12px;">AVG</span>, <span style="color:var(--violet);font-family:monospace;font-weight:700;font-size:12px;">MAX</span> ইত্যাদি।<br>
+            <span style="color:var(--muted);font-size:12px;">Identifies the operation the user wants to perform.</span>
+          </p>
+        </div>
+        <div class="brain-card">
+          <div class="bc-num">Module C</div>
+          <h4>Schema Matcher</h4>
+          <p>সাধারণ শব্দকে Column-এ মেলায়: <span style="color:var(--amber);font-family:monospace;font-size:12px;">"income"</span> → <span style="color:var(--blue);font-family:monospace;font-weight:700;font-size:12px;">Salary</span>, <span style="color:var(--amber);font-family:monospace;font-size:12px;">"location"</span> → <span style="color:var(--blue);font-family:monospace;font-weight:700;font-size:12px;">City</span>.<br>
+            <span style="color:var(--muted);font-size:12px;">Maps everyday words to actual column names.</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider">STEP 05 → 06</div>
+
+  <!-- STEP 6 -->
+  <section class="step" data-step="6">
+    <div class="card">
+      <div class="step-hdr">
+        <div class="step-num c-teal">06</div>
+        <div class="title-wrap">
+          <div class="en-label">Step 06 · Decomposition</div>
+          <h2>🧩 Compositional Parser</h2>
+        </div>
+      </div>
+      <p class="desc">প্রশ্নটাকে তিনটা ভাগে আলাদা করা হয় — <span class="hl">Intent</span>, <span class="hl-t">Column</span>, আর <span class="hl-a">Condition</span>।<br>
+        <span class="en">The query is broken into three parts — Intent, Column, and Condition.</span></p>
+      <div class="tbl-wrap">
+        <div class="tbl-hdr">Input: "Count employees from Dhaka"</div>
+        <div class="parse-row">
+          <div class="parse-item">
+            <div class="parse-lbl">Intent</div>
+            <div class="parse-val" style="background:var(--violet-soft);color:var(--violet);">COUNT</div>
+          </div>
+          <div class="parse-arr">→</div>
+          <div class="parse-item">
+            <div class="parse-lbl">Column</div>
+            <div class="parse-val" style="background:var(--teal-soft);color:var(--teal);">City</div>
+          </div>
+          <div class="parse-arr">→</div>
+          <div class="parse-item">
+            <div class="parse-lbl">Condition</div>
+            <div class="parse-val" style="background:var(--amber-soft);color:#92400e;font-size:12px;">City = 'Dhaka'</div>
+          </div>
+          <div class="parse-arr">→</div>
+          <div class="parse-item">
+            <div class="parse-lbl">Table</div>
+            <div class="parse-val" style="background:var(--blue-soft);color:var(--blue);">employees</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider">STEP 06 → 07</div>
+
+  <!-- STEP 7 -->
+  <section class="step" data-step="7">
+    <div class="card">
+      <div class="step-hdr">
+        <div class="step-num c-violet">07</div>
+        <div class="title-wrap">
+          <div class="en-label">Step 07 · Generation</div>
+          <h2>⚙️ SQL Query Generator</h2>
+        </div>
+      </div>
+      <p class="desc">Parser-এর বের করা তথ্য জোড়া দিয়ে আসল <span class="hl-t">SQL Query</span> তৈরি হয়।<br>
+        <span class="en">The parsed components are assembled into a real, executable SQL query.</span></p>
+      <pre><span class="com">-- Generated for: "Show employees from Dhaka whose salary is above 42000"</span>
+
+<span class="kw">SELECT</span> *
+<span class="kw">FROM</span>   employees
+<span class="kw">WHERE</span>  City   = <span class="val">'Dhaka'</span>
+  <span class="kw">AND</span>  Salary > <span class="val">42000</span>;</pre>
+    </div>
+  </section>
+
+  <div class="divider">STEP 07 → 08</div>
+
+  <!-- STEP 8 -->
+  <section class="step" data-step="8">
+    <div class="card">
+      <div class="step-hdr">
+        <div class="step-num c-amber">08</div>
+        <div class="title-wrap">
+          <div class="en-label">Step 08 · Execution</div>
+          <h2>▶️ SQLite-এ এক্সিকিউশন · Execute Query</h2>
+        </div>
+      </div>
+      <p class="desc">তৈরি হওয়া SQL সরাসরি ডাটাবেসের ওপর রান করা হয়।<br>
+        <span class="en">The generated SQL is executed directly against the SQLite database.</span></p>
+      <pre>cursor.<span class="fn">execute</span>(sql)
+rows = cursor.<span class="fn">fetchall</span>()
+<span class="com"># ডাটাবেস থেকে ম্যাচিং রেকর্ড ফেরত আসে · matching records returned</span></pre>
+    </div>
+  </section>
+
+  <div class="divider">STEP 08 → 09</div>
+
+  <!-- STEP 9 -->
+  <section class="step" data-step="9">
+    <div class="card">
+      <div class="step-hdr">
+        <div class="step-num c-green">09</div>
+        <div class="title-wrap">
+          <div class="en-label">Step 09 · Output</div>
+          <h2>✅ চূড়ান্ত Result · Final Answer</h2>
+        </div>
+      </div>
+      <p class="desc">ইউজার পেয়ে যায় তার চাওয়া উত্তর — কোনো SQL না লিখেই।<br>
+        <span class="en">The user receives their answer — without writing a single line of SQL.</span></p>
+      <div class="tbl-wrap">
+        <div class="tbl-hdr">Result — "Show employees from Dhaka whose salary is above 42000"</div>
+        <table class="demo">
+          <tr><th>Name</th><th>Age</th><th>City</th><th>Salary</th></tr>
+          <tr class="match"><td>Karim</td><td>25</td><td>Dhaka</td><td>45000</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider">· SUMMARY ·</div>
+
+  <!-- SUMMARY -->
+  <section class="step" data-step="10">
+    <div class="card">
+      <div class="step-hdr">
+        <div class="step-num c-blue" style="font-size:18px;">∑</div>
+        <div class="title-wrap">
+          <div class="en-label">Full Pipeline</div>
+          <h2>🔄 পুরো পাইপলাইন একনজরে · Full Pipeline at a Glance</h2>
+        </div>
+      </div>
+      <div class="summary-flow">
+        <div class="flow-node"><span class="fi">📤</span>ইউজার প্রশ্ন করল · User asks a question</div>
+        <div class="flow-down">↓</div>
+        <div class="flow-node"><span class="fi">🐼</span>CSV → Pandas DataFrame → SQLite Database</div>
+        <div class="flow-down">↓</div>
+        <div class="flow-node"><span class="fi">🧬</span>Database Schema এক্সট্র্যাক্ট হলো · Schema extracted</div>
+        <div class="flow-down">↓</div>
+        <div class="flow-node accent"><span class="fi">🧠</span>AI বুঝল: Intent + Column + Condition</div>
+        <div class="flow-down">↓</div>
+        <div class="flow-node"><span class="fi">⚙️</span>SQL Query তৈরি হলো · SQL generated</div>
+        <div class="flow-down">↓</div>
+        <div class="flow-node"><span class="fi">▶️</span>SQLite-এ এক্সিকিউট হলো · Query executed</div>
+        <div class="flow-down">↓</div>
+        <div class="flow-node accent"><span class="fi">✅</span>Result ইউজারকে দেখানো হলো · Result shown to user</div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div style="width:100%;display:flex;justify-content:center;">
+
+    <div style="background:#fff;width:90%;max-width:780px;padding:25px;border-radius:15px;box-shadow:0 5px 20px rgba(0,0,0,.12);text-align:center;">
+
+        <h2 style="margin-bottom:20px;color:#333;">
+            Natural Language to SQL System Architecture
+        </h2>
+
+        <img src="pic.png"
+             style="display:block;margin:0 auto;width:75%;max-width:550px;height:auto;border-radius:10px;border:1px solid #ddd;">
+
+        <br>
+
+        <a href="pic.png"
+           download
+           style="display:inline-block;padding:10px 25px;background:#0d6efd;color:#fff;text-decoration:none;border-radius:8px;font-size:16px;font-weight:bold;">
+            ⬇ Download Diagram
+        </a>
+
+    </div>
+
+</div>
+
+<footer>
+  <div class="footer-brand">NL → SQL Pipeline</div>
+  Built for a CSE366-style Natural Language → SQL demo <span class="heart">♥(Fuad)</span>
+</footer>
+
+<script>
+  // Scroll reveal
+  const steps = document.querySelectorAll('.step');
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('visible'); });
+  }, { threshold: 0.1 });
+  steps.forEach(s => io.observe(s));
+
+  // Nav dots
+  const navDots = document.getElementById('navDots');
+  steps.forEach((s, i) => {
+    const d = document.createElement('div');
+    d.className = 'nav-dot';
+    d.title = 'Step ' + (i + 1);
+    d.onclick = () => s.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    navDots.appendChild(d);
+  });
+  const dotEls = navDots.querySelectorAll('.nav-dot');
+  const dotObs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      const idx = Array.from(steps).indexOf(e.target);
+      if(idx >= 0 && e.isIntersecting){
+        dotEls.forEach(d => d.classList.remove('active'));
+        dotEls[idx].classList.add('active');
+      }
+    });
+  }, { threshold: 0.5 });
+  steps.forEach(s => dotObs.observe(s));
+</script>
+
+</body>
+</html>
