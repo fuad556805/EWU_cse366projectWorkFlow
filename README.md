@@ -1,11 +1,4 @@
-Project Proposal
-East West University
-
-📅 Semester: Summer 2026
-🎓 Course Title: Artificial Intelligence
-📖 Course Code: CSE366
-👥 Section: 05
-🧑‍🤝‍🧑 Group Number: 02
+# Project Proposal > **🏫 East West University** > **📚 Course:** CSE366 – Artificial Intelligence > **📅 Semester:** Summer 2026 > **👥 Section:** 05 > **🔢 Group:** 02 ---
 
 ## Project Title: Natural Language to SQL Query Generation System
 (Compositional Learning).
