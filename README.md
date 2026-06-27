@@ -1,7 +1,7 @@
-Project Title: Natural Language to SQL Query Generation System
+## Project Title: Natural Language to SQL Query Generation System
 (Compositional Learning).
 
-Project Objective
+## Project Objective
 
 The goal of this project is to build a system that can convert simple English questions into SQL
 queries. Many users do not know SQL, so it is difficult for them to get information from a
