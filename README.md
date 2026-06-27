@@ -1,3 +1,11 @@
+# Project Proposal 
+# Semester: Summer 2026 
+# Course Title: Artificial Intelligence 
+# Course Code: CSE366 
+# Sec: 05 
+# Group Number: 02
+
+
 ## Project Title: Natural Language to SQL Query Generation System
 (Compositional Learning).
 
