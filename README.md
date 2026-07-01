@@ -50,3 +50,6 @@ Intelligence, Natural Language Processing, and database systems.
 3. Wang et al. (2020), RAT-SQL.
 4. Yu et al. (2018), Spider Dataset.
 5. Raffel et al. (2020), T5 Transformer.
+
+### Live Workflow:
+https://fuad556805.github.io/EWU_cse366projectWorkFlow/
